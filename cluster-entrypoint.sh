@@ -2,22 +2,25 @@
 
 set -e
 
-# Start RMQ from entry point.
-# This will ensure that environment variables passed
-# will be honored
-/usr/local/bin/docker-entrypoint.sh rabbitmq-server -detached
+# Change .erlang.cookie permission
+chmod 400 /var/lib/rabbitmq/.erlang.cookie
 
-# Do the cluster dance
-rabbitmqctl stop_app
-rabbitmqctl join_cluster rabbit@rabbitmq1
+# Get hostname from enviromant variable
+HOSTNAME=`env hostname`
+echo "Starting RabbitMQ Server For host: " $HOSTNAME
 
-# Stop the entire RMQ server. This is done so that we
-# can attach to it again, but without the -detached flag
-# making it run in the forground
-rabbitmqctl stop
+if [ -z "$JOIN_CLUSTER_HOST" ]; then
+    /usr/local/bin/docker-entrypoint.sh rabbitmq-server &
+    sleep 5
+    rabbitmqctl wait /var/lib/rabbitmq/mnesia/rabbit\@$HOSTNAME.pid
+else
+    /usr/local/bin/docker-entrypoint.sh rabbitmq-server -detached
+    sleep 5
+    rabbitmqctl wait /var/lib/rabbitmq/mnesia/rabbit\@$HOSTNAME.pid
+    rabbitmqctl stop_app
+    rabbitmqctl join_cluster rabbit@$JOIN_CLUSTER_HOST
+    rabbitmqctl start_app
+fi
 
-# Wait a while for the app to really stop
-sleep 2s
-
-# Start it
-rabbitmq-server
+# Keep foreground process active ...
+tail -f /dev/null
