@@ -32,6 +32,8 @@ else
     rabbitmqctl start_app
   fi
 
-  # Replace backgrounded node with foreground process to keep container alive
-  exec tail -f /var/lib/rabbitmq/*.log
+  echo "Switching node to foreground (Docker logs) instead of tailing files..."
+  # Stop the detached node process and replace it with a foreground server
+  rabbitmqctl stop
+  exec /usr/local/bin/docker-entrypoint.sh rabbitmq-server
 fi

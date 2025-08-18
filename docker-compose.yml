@@ -12,6 +12,7 @@ services:
     volumes:
       - rabbitmq1-data:/var/lib/rabbitmq
       - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
       interval: 10s
@@ -32,6 +33,7 @@ services:
     volumes:
       - rabbitmq2-data:/var/lib/rabbitmq
       - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
       interval: 10s
@@ -50,8 +52,8 @@ services:
       - rabbitmq1
       - rabbitmq2
     ports:
-      - 127.0.0.1:15672:15672
-      - 5672:5672
+      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:5672:5672"
 
 volumes:
   rabbitmq1-data:
