@@ -1,34 +1,48 @@
-version: '3'
+version: '3.8'
 services:
   rabbitmq1:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management-alpine
     hostname: rabbitmq1
     restart: always
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
       - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
     volumes:
-      - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
-      - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh
+      - rabbitmq1-data:/var/lib/rabbitmq
+      - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     entrypoint: /usr/local/bin/cluster-entrypoint.sh
 
   rabbitmq2:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13-management-alpine
     hostname: rabbitmq2
     restart: always
     depends_on:
       - rabbitmq1
     environment:
       - JOIN_CLUSTER_HOST=rabbitmq1
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
     volumes:
-      - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
-      - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh
+      - rabbitmq2-data:/var/lib/rabbitmq
+      - ./cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     entrypoint: /usr/local/bin/cluster-entrypoint.sh
 
 
   haproxy:
-    image: haproxy:1.7
+    image: haproxy:2.8
     restart: always
     volumes:
       - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
@@ -38,3 +52,7 @@ services:
     ports:
       - 127.0.0.1:15672:15672
       - 5672:5672
+
+volumes:
+  rabbitmq1-data:
+  rabbitmq2-data:
