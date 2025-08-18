@@ -4,7 +4,9 @@ This project provides a simple, production‑oriented setup for a two‑node Rab
 
 ## Prerequisites
 - Docker and Docker Compose (v2 recommended)
+- GNU Make (optional but recommended; required for the helper commands)
 - Ports available: 5672 (AMQP) and 15672 (management via HAProxy)
+- Note: TLS helper targets (nginx-config, certbot-setup, tls-setup) are intended for Linux hosts where Nginx/Certbot are installed.
 
 ## Installation
 
@@ -63,7 +65,7 @@ This example ships with two nodes. To add a third node:
   - Management UI is exposed via HAProxy on localhost only in compose. If deploying remotely, restrict access (firewalls, security groups, VPN).
   - Consider enabling TLS for AMQP and management in a production deployment. This example does not configure TLS by default.
 - Upgrades: Images are pinned to stable versions. To upgrade, change tags in `docker-compose.yml` and redeploy.
-- Logs: Container logs are available via `docker logs`. The join script tails RabbitMQ logs on peer nodes.
+- Logs: Both nodes run RabbitMQ in the foreground; view logs via `docker compose logs` or `docker logs`.
 
 ## Using a Local HAProxy Instead
 If you prefer a locally installed HAProxy, remove or comment out the HAProxy service in `docker-compose.yml`, and replicate the ports and backends defined in `haproxy.cfg` on your host HAProxy. Ensure it can reach the Docker network or map host ports directly to the containers.
@@ -77,6 +79,8 @@ If you prefer a locally installed HAProxy, remove or comment out the HAProxy ser
 You can deploy and manage the stack using the provided Makefile. Common commands:
 - make deploy
   - Ensures .env exists (copies from sample.env if missing), starts services, waits for health, and shows status.
+- make help
+  - Shows available targets and options.
 - make up
   - Starts services in detached mode.
 - make down
@@ -93,3 +97,45 @@ You can deploy and manage the stack using the provided Makefile. Common commands
   - Creates .env from sample.env if missing.
 - make clean
   - Stops the stack and removes named volumes (data destructive).
+
+## Optional: Enable TLS via Nginx (AMQPS)
+You can terminate TLS on Nginx and forward plaintext AMQP to HAProxy, using the Makefile target that generates an Nginx stream config.
+
+- Prerequisites:
+  - Nginx installed locally on the host where clients connect.
+  - A valid certificate (e.g., from Let’s Encrypt) for your domain.
+- Command:
+  - make nginx-config DOMAIN=queue.example.com
+    - Optional variables:
+      - NGINX_STREAM_DIR: Destination directory for the generated config (auto-detected among /etc/nginx/streams-enabled, /etc/nginx/stream.d, /etc/nginx/conf.d, /etc/nginx/sites-enabled if not set)
+      - CERT_DIR: Certificate directory (defaults to /etc/letsencrypt/live/$DOMAIN)
+      - CERT_FULLCHAIN: Full chain cert path (overrides CERT_DIR)
+      - CERT_KEY: Private key path (overrides CERT_DIR)
+      - LISTEN_PORT: Public TLS port (default 5671)
+      - BACKEND_HOST/BACKEND_PORT: Where to forward traffic (defaults 127.0.0.1:5672)
+- Notes:
+  - A sample Nginx stream config is provided at nginx-rabbitmq.sample.conf for reference.
+  - The generated config is named nginx-rabbitmq-$DOMAIN.conf and Nginx is tested and reloaded automatically.
+  - After this, clients can connect using amqps://USER:PASS@queue.example.com:5671/VHOST
+
+## Automated TLS Setup with Certbot (interactive)
+This repository includes an interactive helper that will:
+- Ask you to confirm DNS is correctly configured for your domain.
+- Install Nginx and Certbot if missing (Debian/Ubuntu and RHEL/CentOS/Alma/Rocky supported).
+- Obtain a Let’s Encrypt certificate using the HTTP-01 challenge.
+- Optionally generate the Nginx AMQPS stream config and reload Nginx.
+
+Quick start (on the host where Nginx will run):
+- Using Make (recommended):
+  - make tls-setup DOMAIN=queue.example.com EMAIL=admin@example.com
+    - This will prompt you to confirm DNS, install prerequisites, obtain the cert, generate the Nginx config, test, and reload.
+- Or run the script directly:
+  - sudo DOMAIN=queue.example.com EMAIL=admin@example.com ./setup-certbot.sh
+  - Then generate the Nginx config:
+    - make nginx-config DOMAIN=queue.example.com
+
+Requirements and notes:
+- You must run on the public-facing host for the domain, and have TCP port 80 reachable from the internet for the HTTP-01 challenge.
+- The script temporarily stops Nginx (if running) to use Certbot’s standalone authenticator, then starts Nginx again.
+- Certificates are stored under /etc/letsencrypt/live/$DOMAIN.
+- After running tls-setup, AMQPS will be exposed via Nginx on port 5671 by default, forwarding to HAProxy on 5672.
