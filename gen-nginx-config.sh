@@ -20,17 +20,7 @@ if [ -z "$dest_dir" ]; then
   echo "Please create one and pass NGINX_STREAM_DIR=/path/to/dir" >&2
   exit 1
 fi
-
-# Determine certificate paths
-fullchain="${CERT_FULLCHAIN:-}"
-privkey="${CERT_KEY:-}"
-if [ -z "$fullchain" ] || [ -z "$privkey" ]; then
-  cert_dir="${CERT_DIR:-}"
-  if [ -z "$cert_dir" ]; then cert_dir="/etc/letsencrypt/live/${DOMAIN}"; fi
-  fullchain="${cert_dir}/fullchain.pem"
-  privkey="${cert_dir}/privkey.pem"
-fi
-
+# ... existing code ...
 # Defaults
 LISTEN_PORT="${LISTEN_PORT:-5671}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
@@ -39,7 +29,25 @@ NGINX_CONFIG_NAME="${NGINX_CONFIG_NAME:-nginx-rabbitmq-${DOMAIN}.conf}"
 NGINX_TEST="${NGINX_TEST:-nginx -t}"
 NGINX_RELOAD="${NGINX_RELOAD:-nginx -s reload}"
 
-cfg_path="${dest_dir}/${NGINX_CONFIG_NAME}"
+# Prefer sites-available/sites-enabled unless NGINX_STREAM_DIR is explicitly set
+available_dir="${NGINX_AVAILABLE_DIR:-}"
+enabled_dir="${NGINX_ENABLED_DIR:-}"
+if [ -z "${NGINX_STREAM_DIR:-}" ]; then
+  if [ -z "$available_dir" ] && [ -d /etc/nginx/sites-available ]; then
+    available_dir="/etc/nginx/sites-available"
+  fi
+  if [ -z "$enabled_dir" ] && [ -d /etc/nginx/sites-enabled ]; then
+    enabled_dir="/etc/nginx/sites-enabled"
+  fi
+fi
+
+# Fallback to legacy single-dir behavior if we couldn't detect both
+if [ -z "$available_dir" ] || [ -z "$enabled_dir" ]; then
+  available_dir="$dest_dir"
+  enabled_dir=""
+fi
+
+cfg_path="${available_dir}/${NGINX_CONFIG_NAME}"
 echo "Generating Nginx stream config at: ${cfg_path}"
 
 umask 022
@@ -69,6 +77,12 @@ server {
 }
 EOF_CFG
 
+# Create/refresh symlink in sites-enabled if applicable
+if [ -n "$enabled_dir" ]; then
+  ln -sf "${cfg_path}" "${enabled_dir}/${NGINX_CONFIG_NAME}"
+  echo "Symlinked ${enabled_dir}/${NGINX_CONFIG_NAME} -> ${cfg_path}"
+fi
+# ... existing code ...
 # Test and reload Nginx
 echo "Testing Nginx configuration..."
 if ! sh -c "$NGINX_TEST"; then
