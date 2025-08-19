@@ -83,22 +83,16 @@ fi
 echo "Reloading Nginx..."
 sh -c "$NGINX_RELOAD"
 
-# Run Certbot to get SSL certificate if not already set up
-need_cert=true
 
-if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
-  echo "Certificate for ${DOMAIN} already exists."
-  need_cert=false
-fi
 
 # Run certbot if needed
-if [ "$need_cert" = "true" ]; then
-  echo "Getting SSL certificate for ${DOMAIN}..."
-  if ! certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --email "${EMAIL:-admin@example.com}"; then
-    echo "WARNING: Failed to obtain certificate for ${DOMAIN}. You may need to run manually:" >&2
-    echo "  sudo certbot --nginx -d ${DOMAIN}" >&2
-  fi
+
+echo "Getting SSL certificate for ${DOMAIN}..."
+if ! certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --email "${EMAIL:-admin@example.com}"; then
+  echo "WARNING: Failed to obtain certificate for ${DOMAIN}. You may need to run manually:" >&2
+  echo "  sudo certbot --nginx -d ${DOMAIN}" >&2
 fi
+
 
 # Show configuration information
 echo ""
@@ -106,12 +100,12 @@ echo "===================================================================="
 echo "RabbitMQ Configuration Summary:"
 echo "===================================================================="
 echo "✅ Management UI: https://${DOMAIN}"
-echo "✅ AMQP Port: ${AMQP_PORT} (public)"
 echo ""
-echo "Docker Compose port configuration:"
-echo "  - \"127.0.0.1:15672:15672\"  # Management UI (localhost only)"
-echo "  - \"${AMQP_PORT}:5672\"      # AMQP port (public)"
+echo "Your docker-compose.yml should have these ports configured:"
 echo ""
-echo "Client connection string:"
-echo "  amqp://username:password@your-server-ip:${AMQP_PORT}/vhost"
+echo "  ports:"
+echo "    - \"127.0.0.1:15672:15672\"  # Management UI (localhost only)"
+echo "    - \"${AMQP_PORT}:5672\"      # AMQP port (public)"
+echo ""
+echo "Clients should connect to: amqp://username:password@your-server-ip:${AMQP_PORT}/vhost"
 echo "===================================================================="
